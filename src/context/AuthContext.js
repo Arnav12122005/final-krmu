@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import axiosInstance from '@/utils/axiosConfig';
 
 const AuthContext = createContext(null);
@@ -11,6 +11,45 @@ export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(localStorage.getItem('token'));
   const [privateKey, setPrivateKey] = useState(localStorage.getItem('privateKey'));
   const [loading, setLoading] = useState(true);
+
+  const checkSessionAuth = useCallback(async () => {
+    try {
+      const response = await axiosInstance.get(`${API}/me`, {
+        withCredentials: true
+      });
+      setUser(response.data);
+      
+      const keyResponse = await axiosInstance.get(`${API}/me/private-key`, {
+        withCredentials: true
+      });
+      setPrivateKey(keyResponse.data.private_key);
+      localStorage.setItem('privateKey', keyResponse.data.private_key);
+    } catch (error) {
+      // Not authenticated via session cookie
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const fetchCurrentUser = useCallback(async () => {
+    try {
+      const response = await axiosInstance.get(`${API}/me`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setUser(response.data);
+      
+      const keyResponse = await axiosInstance.get(`${API}/me/private-key`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setPrivateKey(keyResponse.data.private_key);
+      localStorage.setItem('privateKey', keyResponse.data.private_key);
+    } catch (error) {
+      console.error('Failed to fetch user:', error);
+      // Don't call logout here to avoid circular dependency
+    } finally {
+      setLoading(false);
+    }
+  }, [token]);
 
   useEffect(() => {
     // CRITICAL: If returning from OAuth callback, skip the /me check.
@@ -39,46 +78,7 @@ export const AuthProvider = ({ children }) => {
     } else {
       checkSessionAuth();
     }
-  }, [token]);
-
-  const checkSessionAuth = async () => {
-    try {
-      const response = await axiosInstance.get(`${API}/me`, {
-        withCredentials: true
-      });
-      setUser(response.data);
-      
-      const keyResponse = await axiosInstance.get(`${API}/me/private-key`, {
-        withCredentials: true
-      });
-      setPrivateKey(keyResponse.data.private_key);
-      localStorage.setItem('privateKey', keyResponse.data.private_key);
-    } catch (error) {
-      // Not authenticated via session cookie
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchCurrentUser = async () => {
-    try {
-      const response = await axiosInstance.get(`${API}/me`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setUser(response.data);
-      
-      const keyResponse = await axiosInstance.get(`${API}/me/private-key`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setPrivateKey(keyResponse.data.private_key);
-      localStorage.setItem('privateKey', keyResponse.data.private_key);
-    } catch (error) {
-      console.error('Failed to fetch user:', error);
-      logout();
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [token, fetchCurrentUser, checkSessionAuth]);
 
   const login = async (email, password) => {
     const response = await axiosInstance.post(`${API}/auth/login`, { email, password });
