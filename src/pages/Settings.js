@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '@/context/AuthContext';
@@ -25,21 +25,13 @@ const Settings = () => {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    fetchSettings();
-    if (user?.role === 'admin') {
-      fetchAllUsers();
-    }
-    requestNotificationPermission();
-  }, []);
-
-  const requestNotificationPermission = async () => {
+  const requestNotificationPermission = useCallback(async () => {
     if ('Notification' in window && Notification.permission === 'default') {
       await Notification.requestPermission();
     }
-  };
+  }, []);
 
-  const fetchSettings = async () => {
+  const fetchSettings = useCallback(async () => {
     try {
       const response = await axios.get(`${API}/me/settings`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -49,9 +41,9 @@ const Settings = () => {
     } catch (error) {
       console.error('Failed to fetch settings:', error);
     }
-  };
+  }, [token]);
 
-  const fetchAllUsers = async () => {
+  const fetchAllUsers = useCallback(async () => {
     try {
       const response = await axios.get(`${API}/users`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -61,7 +53,15 @@ const Settings = () => {
     } catch (error) {
       console.error('Failed to fetch users:', error);
     }
-  };
+  }, [token]);
+
+  useEffect(() => {
+    fetchSettings();
+    if (user?.role === 'admin') {
+      fetchAllUsers();
+    }
+    requestNotificationPermission();
+  }, [user?.role, fetchSettings, fetchAllUsers, requestNotificationPermission]);
 
   const updateSettings = async (newSettings) => {
     try {
