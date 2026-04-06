@@ -43,39 +43,7 @@ const ChatDashboard = () => {
   const messagesEndRef = useRef(null);
   const wsRef = useRef(null);
 
-  useEffect(() => {
-    if (!token) {
-      navigate('/login');
-      return;
-    }
-    
-    requestNotificationPermission();
-    fetchUsers();
-    fetchAnnouncements();
-    connectWebSocket();
-
-    // Poll for new announcements every 30 seconds
-    const announcementInterval = setInterval(fetchAnnouncements, 30000);
-
-    return () => {
-      if (wsRef.current) {
-        wsRef.current.disconnect();
-      }
-      clearInterval(announcementInterval);
-    };
-  }, [token]);
-
-  useEffect(() => {
-    if (selectedUser) {
-      fetchMessages(selectedUser.id);
-    }
-  }, [selectedUser]);
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
-
-  const connectWebSocket = () => {
+  const connectWebSocket = useCallback(() => {
     const socket = io(BACKEND_URL, {
       auth: {
         token: token
@@ -119,9 +87,9 @@ const ChatDashboard = () => {
     });
 
     wsRef.current = socket;
-  };
+  }, [token, selectedUser, user?.id, privateKey]);
 
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     try {
       const response = await axiosInstance.get(`${API}/users`, {
         headers: { Authorization: `Bearer ${token}` }
@@ -131,9 +99,20 @@ const ChatDashboard = () => {
       console.error('Failed to fetch users:', error);
       toast.error('Failed to load users');
     }
-  };
+  }, [token]);
 
-  const fetchMessages = async (userId) => {
+  const fetchAnnouncements = useCallback(async () => {
+    try {
+      const response = await axiosInstance.get(`${API}/announcements`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setAnnouncements(response.data);
+    } catch (error) {
+      console.error('Failed to fetch announcements:', error);
+    }
+  }, [token]);
+
+  const fetchMessages = useCallback(async (userId) => {
     try {
       const response = await axiosInstance.get(`${API}/messages/${userId}`, {
         headers: { Authorization: `Bearer ${token}` }
@@ -157,7 +136,35 @@ const ChatDashboard = () => {
     } catch (error) {
       console.error('Failed to fetch messages:', error);
     }
-  };
+  }, [token, user?.id, privateKey]);
+
+  useEffect(() => {
+    if (!token) {
+      navigate('/login');
+      return;
+    }
+    
+    requestNotificationPermission();
+    fetchUsers();
+    fetchAnnouncements();
+    connectWebSocket();
+
+    // Poll for new announcements every 30 seconds
+    const announcementInterval = setInterval(() => fetchAnnouncements(), 30000);
+
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.disconnect();
+      }
+      clearInterval(announcementInterval);
+    };
+  }, [token, navigate, fetchUsers, fetchAnnouncements, connectWebSocket]);
+
+  useEffect(() => {
+    if (selectedUser) {
+      fetchMessages(selectedUser.id);
+    }
+  }, [selectedUser, fetchMessages]);
 
   const sendMessage = async (e) => {
     e.preventDefault();
